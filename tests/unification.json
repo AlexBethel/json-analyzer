@@ -1,0 +1,15 @@
+{
+    "heterogeneous":[
+        1,
+        "hello"
+    ],
+    "objects":[
+        {
+            "foo":"bar"
+        },
+        {
+            "foo":"baz",
+            "quux":true
+        }
+    ]
+}

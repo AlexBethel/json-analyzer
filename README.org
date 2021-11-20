@@ -1,0 +1,6 @@
+* json-analyzer
+
+  =json-analyzer= is a simple tool for analyzing the structure of a
+  JSON file. The tool accomplishes this goal by searching through a
+  file specified on the command line and generating a set of Rust xdata
+  structure definitions.

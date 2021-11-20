@@ -1,0 +1,10 @@
+{
+    "null": null,
+    "string": "hello",
+    "number": 123,
+    "bool": true,
+    "object": {
+        "hello": "world"
+    },
+    "arr": [1, 2, 3]
+}
