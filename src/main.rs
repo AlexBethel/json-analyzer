@@ -38,7 +38,7 @@ fn main() {
 }
 
 /// Types of data in a JSON structure.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum DataType {
     /// Data that is always Null. In practice, this is usually
     /// combined with `Variant` to create an optional value.
@@ -63,7 +63,8 @@ enum DataType {
     /// An array of elements with the same type.
     Array(Box<DataType>),
 
-    /// One of several possible types.
+    /// One of several possible types. An empty Variant is also used
+    /// to represent an unknown type.
     Variant(Vec<DataType>),
 }
 
@@ -95,5 +96,151 @@ impl DataType {
                     .unwrap_or(Self::Variant(Vec::new())),
             )),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use json::short::Short;
+
+    #[test]
+    fn basic_types() {
+        assert_eq!(DataType::from_json_value(&JsonValue::Null), DataType::Null);
+        assert_eq!(
+            DataType::from_json_value(&JsonValue::String("hello".to_string())),
+            DataType::String
+        );
+
+        let s = "foo";
+        if json::short::MAX_LEN >= s.len() {
+            // SAFETY: A Short is defined to be able to store at least
+            // MAX_LEN bytes, and MAX_LEN >= the length of s,
+            // therefore a Short is able to store a string of s's
+            // length.
+            let s = JsonValue::Short(unsafe { Short::from_slice(s) });
+
+            assert_eq!(DataType::from_json_value(&s), DataType::String);
+        } else {
+            panic!("Failed to test Short");
+        }
+
+        assert_eq!(
+            DataType::from_json_value(&JsonValue::Boolean(true)),
+            DataType::Bool
+        );
+    }
+
+    #[test]
+    fn numbers() {
+        assert_eq!(
+            DataType::from_json_value(&JsonValue::Number(10.into())),
+            DataType::Int
+        );
+        assert_eq!(
+            DataType::from_json_value(&JsonValue::Number((10.5).into())),
+            DataType::Float
+        );
+    }
+
+    #[test]
+    fn unification() {
+        assert_eq!(
+            DataType::unify(DataType::String, DataType::Bool),
+            DataType::Variant(vec![DataType::String, DataType::Bool])
+        );
+        assert_eq!(
+            DataType::unify(
+                DataType::Variant(vec![DataType::String, DataType::Bool]),
+                DataType::Null
+            ),
+            DataType::Variant(vec![DataType::String, DataType::Bool, DataType::Null])
+        );
+    }
+
+    #[test]
+    fn floats_override_ints() {
+        assert_eq!(
+            DataType::unify(DataType::Int, DataType::Float),
+            DataType::Float
+        );
+    }
+
+    #[test]
+    fn structs() {
+        let a = DataType::from_json_value(&json::object! {
+            "null": null,
+            "string": "hello",
+            "number": 123,
+            "bool": true,
+            "object": {
+                "hello": "world"
+            },
+            "arr": [1, 2, 3]
+        });
+        let b = DataType::Object(
+            [
+                ("null", DataType::Null),
+                ("string", DataType::String),
+                ("number", DataType::Int),
+                ("bool", DataType::Bool),
+                (
+                    "object",
+                    DataType::Object(
+                        [("hello", DataType::String)]
+                            .iter()
+                            .map(|(name, typ)| (name.to_string(), (*typ).clone()))
+                            .collect::<HashMap<String, DataType>>(),
+                    ),
+                ),
+                ("arr", DataType::Array(Box::new(DataType::Int))),
+            ]
+            .iter()
+            .map(|(name, typ)| (name.to_string(), (*typ).clone()))
+            .collect::<HashMap<String, DataType>>(),
+        );
+
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn object_unification() {
+        let arr = JsonValue::Array(vec![
+            JsonValue::Number(1.into()),
+            JsonValue::String("hello".to_string()),
+        ]);
+        let arr_typ = DataType::Array(Box::new(DataType::Variant(vec![
+            DataType::Int,
+            DataType::String,
+        ])));
+        assert_eq!(DataType::from_json_value(&arr), arr_typ);
+
+        let objs = JsonValue::Array(vec![
+            json::object! {
+                "foo": "bar"
+            },
+            json::object! {
+                "foo": 123,
+                "baz": true
+            },
+        ]);
+        let objs_type = DataType::Array(Box::new(DataType::Object(
+            [
+                (
+                    "foo",
+                    DataType::Variant(vec![DataType::String, DataType::Int]),
+                ),
+                (
+                    "baz",
+                    DataType::Variant(vec![DataType::Null, DataType::Bool]),
+                ),
+            ]
+            .iter()
+            .map(|(name, typ)| (name.to_string(), (*typ).clone()))
+            .collect::<HashMap<String, DataType>>(),
+        )));
+
+        assert_eq!(DataType::from_json_value(&objs), objs_type);
     }
 }
