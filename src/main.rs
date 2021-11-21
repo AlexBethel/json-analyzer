@@ -1,7 +1,7 @@
 //! A simple program for generating data structure declarations from a
 //! JSON file.
 
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, iter::once, path::Path};
 
 use clap::Arg;
 use json::JsonValue;
@@ -71,8 +71,21 @@ enum DataType {
 impl DataType {
     /// Generate a data type that could represent something of this
     /// type, or of the `other` type.
-    pub fn unify(self, _other: DataType) -> Self {
-        todo!()
+    pub fn unify(self, other: DataType) -> Self {
+        match (self, other) {
+            (t1, t2) if t1 == t2 => t1,
+            (DataType::Variant(types), t2) => {
+                if types.is_empty() {
+                    t2
+                } else if types.contains(&t2) {
+                    DataType::Variant(types)
+                } else {
+                    DataType::Variant(types.into_iter().chain(once(t2)).collect())
+                }
+            }
+            (DataType::Float, DataType::Int) | (DataType::Int, DataType::Float) => DataType::Float,
+            (t1, t2) => DataType::Variant(vec![t1, t2]),
+        }
     }
 
     /// Create a data type that can reprent the given value.
