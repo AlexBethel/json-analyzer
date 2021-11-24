@@ -93,7 +93,7 @@ impl DataType {
         match v {
             JsonValue::Null => Self::Null,
             JsonValue::Short(_) => Self::String,
-            JsonValue::String(_) => Self::Int,
+            JsonValue::String(_) => Self::String,
             JsonValue::Number(_) => todo!(),
             JsonValue::Boolean(_) => Self::Bool,
             JsonValue::Object(obj) => Self::Object(
