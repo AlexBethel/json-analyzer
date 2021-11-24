@@ -94,7 +94,14 @@ impl DataType {
             JsonValue::Null => Self::Null,
             JsonValue::Short(_) => Self::String,
             JsonValue::String(_) => Self::String,
-            JsonValue::Number(_) => todo!(),
+            JsonValue::Number(n) => {
+                let float = f64::from(*n);
+                if float == float.floor() {
+                    Self::Int
+                } else {
+                    Self::Float
+                }
+            }
             JsonValue::Boolean(_) => Self::Bool,
             JsonValue::Object(obj) => Self::Object(
                 obj.iter()
