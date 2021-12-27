@@ -2,6 +2,8 @@
 edition = "2018"
 name = "json-analyzer"
 version = "0.1.0"
+
 [dependencies]
-clap = "*"
+clap = "2"
 json = "0.12.4"
+anyhow = "1"

@@ -3,14 +3,16 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fs::read_to_string,
     iter::once,
     path::Path,
 };
 
+use anyhow::{Context, Result};
 use clap::Arg;
 use json::JsonValue;
 
-fn main() {
+fn main() -> Result<()> {
     let app = clap::App::new("json-analyzer")
         .arg(
             Arg::with_name("file")
@@ -21,24 +23,15 @@ fn main() {
         .get_matches();
 
     let filename = Path::new(app.value_of_os("file").expect("Required option"));
-    let text = match std::fs::read_to_string(filename) {
-        Ok(data) => data,
-        Err(e) => {
-            eprintln!("Unable to open {:?} for reading: {}", filename, e);
-            return;
-        }
-    };
-
-    let data = match json::parse(&text) {
-        Ok(data) => data,
-        Err(e) => {
-            eprintln!("Invalid json data: {}", e);
-            return;
-        }
-    };
+    let data = json::parse(
+        &read_to_string(filename).with_context(|| format!("failed to read file {:?}", filename))?,
+    )
+    .with_context(|| "unable to parse JSON file")?;
 
     let typ = DataType::from_json_value(&data);
     println!("{:?}", typ);
+
+    Ok(())
 }
 
 /// Types of data in a JSON structure.
