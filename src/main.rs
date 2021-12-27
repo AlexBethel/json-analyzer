@@ -1,7 +1,11 @@
 //! A simple program for generating data structure declarations from a
 //! JSON file.
 
-use std::{collections::HashMap, iter::once, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    iter::once,
+    path::Path,
+};
 
 use clap::Arg;
 use json::JsonValue;
@@ -38,7 +42,7 @@ fn main() {
 }
 
 /// Types of data in a JSON structure.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord)]
 enum DataType {
     /// Data that is always Null. In practice, this is usually
     /// combined with `Variant` to create an optional value.
@@ -58,14 +62,14 @@ enum DataType {
 
     /// A heterogeneous data structure with named elements, like a
     /// struct.
-    Object(HashMap<String, DataType>),
+    Object(BTreeMap<String, DataType>),
 
     /// An array of elements with the same type.
     Array(Box<DataType>),
 
     /// One of several possible types. An empty Variant is also used
     /// to represent an unknown type.
-    Variant(Vec<DataType>),
+    Variant(BTreeSet<DataType>),
 }
 
 impl DataType {
@@ -84,7 +88,41 @@ impl DataType {
                 }
             }
             (DataType::Float, DataType::Int) | (DataType::Int, DataType::Float) => DataType::Float,
-            (t1, t2) => DataType::Variant(vec![t1, t2]),
+            (DataType::Object(a), DataType::Object(b)) => {
+                // Partition `b` into the elements that occur in both
+                // objects (`shared`) and the elements that only occur
+                // in `b` (`b_only`).
+                let (mut shared, b_only) = b
+                    .into_iter()
+                    .partition::<BTreeMap<_, _>, _>(|(name, _)| a.contains_key(name));
+
+                let data = a
+                    .into_iter()
+                    .map(|(key, value)| {
+                        // Now we unify each element that occurs in
+                        // `a` with its corresponding representation
+                        // in `b`, if it exists; use `null` for
+                        // missing elements.
+                        let b_value = shared.remove(&key).unwrap_or(DataType::Null);
+                        (key, value.unify(b_value))
+                    })
+                    .chain(
+                        // And that just leaves the elements that only
+                        // occur in `b`.
+                        b_only
+                            .into_iter()
+                            .map(|(key, value)| (key, value.unify(DataType::Null))),
+                    )
+                    .collect::<BTreeMap<_, _>>();
+
+                // By now all the elements of `shared` should have
+                // ended up unified inside of `data`, and thus
+                // consumed.
+                debug_assert!(shared.is_empty());
+
+                DataType::Object(data)
+            }
+            (t1, t2) => DataType::Variant(vec![t1, t2].into_iter().collect()),
         }
     }
 
@@ -113,7 +151,7 @@ impl DataType {
                     .iter()
                     .map(Self::from_json_value)
                     .reduce(Self::unify)
-                    .unwrap_or(Self::Variant(Vec::new())),
+                    .unwrap_or(Self::Variant(BTreeSet::new())),
             )),
         }
     }
@@ -168,14 +206,18 @@ mod tests {
     fn unification() {
         assert_eq!(
             DataType::unify(DataType::String, DataType::Bool),
-            DataType::Variant(vec![DataType::String, DataType::Bool])
+            DataType::Variant(vec![DataType::String, DataType::Bool].into_iter().collect())
         );
         assert_eq!(
             DataType::unify(
-                DataType::Variant(vec![DataType::String, DataType::Bool]),
+                DataType::Variant(vec![DataType::String, DataType::Bool].into_iter().collect()),
                 DataType::Null
             ),
-            DataType::Variant(vec![DataType::String, DataType::Bool, DataType::Null])
+            DataType::Variant(
+                vec![DataType::String, DataType::Bool, DataType::Null]
+                    .into_iter()
+                    .collect()
+            )
         );
     }
 
@@ -211,14 +253,14 @@ mod tests {
                         [("hello", DataType::String)]
                             .iter()
                             .map(|(name, typ)| (name.to_string(), (*typ).clone()))
-                            .collect::<HashMap<String, DataType>>(),
+                            .collect::<BTreeMap<String, DataType>>(),
                     ),
                 ),
                 ("arr", DataType::Array(Box::new(DataType::Int))),
             ]
             .iter()
             .map(|(name, typ)| (name.to_string(), (*typ).clone()))
-            .collect::<HashMap<String, DataType>>(),
+            .collect::<BTreeMap<String, DataType>>(),
         );
 
         assert_eq!(a, b);
@@ -230,10 +272,9 @@ mod tests {
             JsonValue::Number(1.into()),
             JsonValue::String("hello".to_string()),
         ]);
-        let arr_typ = DataType::Array(Box::new(DataType::Variant(vec![
-            DataType::Int,
-            DataType::String,
-        ])));
+        let arr_typ = DataType::Array(Box::new(DataType::Variant(
+            vec![DataType::Int, DataType::String].into_iter().collect(),
+        )));
         assert_eq!(DataType::from_json_value(&arr), arr_typ);
 
         let objs = JsonValue::Array(vec![
@@ -249,16 +290,16 @@ mod tests {
             [
                 (
                     "foo",
-                    DataType::Variant(vec![DataType::String, DataType::Int]),
+                    DataType::Variant(vec![DataType::String, DataType::Int].into_iter().collect()),
                 ),
                 (
                     "baz",
-                    DataType::Variant(vec![DataType::Null, DataType::Bool]),
+                    DataType::Variant(vec![DataType::Bool, DataType::Null].into_iter().collect()),
                 ),
             ]
             .iter()
             .map(|(name, typ)| (name.to_string(), (*typ).clone()))
-            .collect::<HashMap<String, DataType>>(),
+            .collect::<BTreeMap<String, DataType>>(),
         )));
 
         assert_eq!(DataType::from_json_value(&objs), objs_type);
