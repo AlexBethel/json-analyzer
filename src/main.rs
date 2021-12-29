@@ -157,7 +157,7 @@ impl DataType {
     }
 
     /// Emit a Rust representation of the data type. Return the
-    /// (automatically-generated) name xof the newly-declared type.
+    /// (automatically-generated) name of the newly-declared type.
     fn declare(self, decls: &mut Decls) -> String {
         match self {
             DataType::Null => "()".to_string(),
