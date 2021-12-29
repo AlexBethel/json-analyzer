@@ -29,7 +29,14 @@ fn main() -> Result<()> {
     .with_context(|| "unable to parse JSON file")?;
 
     let typ = DataType::from_json_value(&data);
-    println!("{:?}", typ);
+    // println!("{:?}", typ);
+
+    let mut decls = Decls {
+        next_index: 0,
+        decls: Vec::new(),
+    };
+    let _top_name = typ.declare(&mut decls);
+    println!("{}", decls.decls.join("\n\n"));
 
     Ok(())
 }
@@ -148,6 +155,62 @@ impl DataType {
             )),
         }
     }
+
+    /// Emit a Rust representation of the data type. We output the
+    /// declaration of the type, and the name of the newly-declared
+    /// type.
+    fn declare(self, decls: &mut Decls) -> String {
+        match self {
+            DataType::Null => "()".to_string(),
+            DataType::String => "String".to_string(),
+            DataType::Int => "i32".to_string(),
+            DataType::Float => "f64".to_string(),
+            DataType::Bool => "bool".to_string(),
+            DataType::Object(members) => {
+                use std::fmt::Write;
+
+                let name = format!("Data{}", decls.next_index);
+                decls.next_index += 1;
+
+                let mut s = format!("struct {} {{\n", name);
+                for (member, member_type) in members.into_iter() {
+                    let type_name = member_type.declare(decls);
+                    write!(s, "    pub {}: {},\n", member, type_name)
+                        .expect("writing to a String can't fail");
+                }
+                s += "}";
+
+                decls.decls.push(s);
+                name
+            }
+            DataType::Array(elems) => {
+                let elem_name = elems.declare(decls);
+                format!("Vec<{}>", elem_name)
+            },
+            DataType::Variant(options) => {
+                use std::fmt::Write;
+
+                let name = format!("Data{}", decls.next_index);
+                decls.next_index += 1;
+
+                let mut s = format!("enum {} {{\n", name);
+                for (idx, option_type) in options.into_iter().enumerate() {
+                    let type_name = option_type.declare(decls);
+                    write!(s, "    Option{}({}),\n", idx, type_name)
+                        .expect("writing to a String can't fail");
+                }
+                s += "}";
+
+                decls.decls.push(s);
+                name
+            },
+        }
+    }
+}
+
+struct Decls {
+    next_index: usize,
+    decls: Vec<String>,
 }
 
 #[cfg(test)]

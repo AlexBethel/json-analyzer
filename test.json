@@ -1,0 +1,48 @@
+{
+    "composers": [
+        {
+            "name": "Antonio Vivaldi",
+            "born": {
+                "year": 1678,
+                "month": 3,
+                "day": 4
+            },
+            "died": {
+                "year": 1741,
+                "month": 7,
+                "day": 28
+            },
+            "instruments": [
+                "violin"
+            ]
+        },
+        {
+            "name": "Johann Sebastian Bach",
+            "born": {
+                "year": 1685,
+                "month": 3,
+                "day": 31
+            },
+            "died": {
+                "year": 1750,
+                "month": 7,
+                "day": 28
+            },
+            "instruments": [
+                "organ"
+            ]
+        },
+        {
+            "name": "Philip Glass",
+            "born": {
+                "year": 1937,
+                "month": 1,
+                "day": 31
+            },
+            "instruments": [
+                "flute",
+                "keyboard"
+            ]
+        }
+    ]
+}
